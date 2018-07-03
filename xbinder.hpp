@@ -118,25 +118,61 @@ namespace xmh {
 		}
 	};
 
-	template<typename Tuple, typename Give_Tuple, typename T, typename...Args>
-	auto dispatch(std::tuple<T, Args...>&& tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
+	template<int...Args>
+	struct make_index
 	{
-		auto real = std::tuple_cat(real_tuple, std::tuple<decltype(filter<T>::template do_filter(std::get<0>(tuple), give_tuple))>(filter<T>::template do_filter(std::get<0>(tuple), give_tuple)));
-		return dispatch(std::make_tuple(std::get<Args>(tuple)...), give_tuple, real);
+
+	};
+
+	template<int N,int Size, int...Args>
+	struct make_index<N, Size,Args...>
+	{
+		using type = typename make_index<N, Size-1, Size-1, Args...>::type;
+	};
+
+	template<int N,int...Args>
+	struct make_index<N,N, Args...>
+	{
+		using type = make_index<Args...>;
+	};
+
+	template<typename T>
+	struct get_tuple_size_help
+	{
+		
+	};
+
+	template<typename...Args>
+	struct get_tuple_size_help<std::tuple<Args...>>
+	{
+		static constexpr int size = sizeof...(Args);
+	};
+
+	template<int...Indexs,typename...Args>
+	auto get_tuple_by_index(make_index<Indexs...>&&, std::tuple<Args...>& tuple)
+	{
+		return std::tuple<std::tuple_element_t<Indexs, std::tuple<Args...>>...>(std::get<Indexs>(tuple)...);
 	}
 
-	template<typename Tuple, typename Give_Tuple, typename T>
-	auto dispatch(std::tuple<T>&& tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
+	template<int N, typename...Place_Tuple, typename Tuple, typename Give_Tuple>
+	auto dispatch(std::tuple<>&& tuple, std::tuple<Place_Tuple...>& place_tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
+	{
+		return real_tuple;
+	};
+
+	template<int N, typename...Place_Tuple, typename Tuple, typename Give_Tuple, typename T>
+	auto dispatch(std::tuple<T>&& tuple, std::tuple<Place_Tuple...>& place_tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
 	{
 		auto real = std::tuple_cat(real_tuple, std::tuple<decltype(filter<T>::template do_filter(std::get<0>(tuple), give_tuple))>(filter<T>::template do_filter(std::get<0>(tuple), give_tuple)));
 		return real;
 	};
 
-	template<typename Tuple, typename Give_Tuple>
-	auto dispatch(std::tuple<>&& tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
+	template<int N,typename...Place_Tuple,typename Tuple, typename Give_Tuple, typename T, typename...Args>
+	auto dispatch(std::tuple<T, Args...>&& tuple, std::tuple<Place_Tuple...>& place_tuple, Give_Tuple&& give_tuple, Tuple&& real_tuple)
 	{
-		return tuple;
-	};
+		auto real = std::tuple_cat(real_tuple, std::tuple<decltype(filter<T>::template do_filter(std::get<0>(tuple), give_tuple))>(filter<T>::template do_filter(std::get<0>(tuple), give_tuple)));
+		return dispatch<N + 1>(get_tuple_by_index(typename make_index<N + 1, sizeof...(Place_Tuple)>::type{},place_tuple), place_tuple, std::move(give_tuple), std::move(real));
+	}
 
 	template<typename F, typename...Args>
 	struct x_binder
@@ -147,18 +183,18 @@ namespace xmh {
 
 		x_binder(F&& function, Args...args) :_function(std::forward<F>(function)), place_tuple(std::tuple<Args...>(args...))
 		{
-
+			/*std::cout << typeid(place_tuple).name() << std::endl;*/
 		}
 		template<typename...RealArgs>
 		function_ret_type  operator()(RealArgs&&...rargs)
 		{
-			auto real = dispatch(std::move(place_tuple), std::tuple<RealArgs...>(std::forward<RealArgs>(rargs)...), std::tuple<>{});
-			return caller(real);
+			auto real = dispatch<0>(std::move(place_tuple),place_tuple, std::tuple<RealArgs...>(std::forward<RealArgs>(rargs)...), std::tuple<>{});
+			return caller(typename make_index<0, get_tuple_size_help<decltype(real)>::size>::type{},real);
 		}
-		template<typename...real_Args>
-		function_ret_type  caller(std::tuple<real_Args...>& tuple)
+		template<int...Indexs,typename...real_Args>
+		function_ret_type  caller(make_index<Indexs...>&&,std::tuple<real_Args...>& tuple)
 		{
-			return _function(std::get<real_Args>(tuple)...);
+			return _function(std::get<Indexs>(tuple)...);
 		}
 		F _function;
 	};
@@ -191,26 +227,14 @@ namespace xmh {
 		template<typename...RealArgs>
 		function_ret_type  operator()(RealArgs&&...rargs)
 		{
-			auto real = dispatch(std::move(place_tuple), std::tuple<RealArgs...>(std::forward<RealArgs>(rargs)...), std::tuple<>{});
-			return caller(real);
+			auto real = dispatch<0>(std::move(place_tuple), place_tuple, std::tuple<RealArgs...>(std::forward<RealArgs>(rargs)...), std::tuple<>{});
+			return caller(typename make_index<0, get_tuple_size_help<decltype(real)>::size>::type{}, real);
 		}
-		template<typename...real_Args>
-		function_ret_type  caller(std::tuple<real_Args...>& tuple)
+		template<int...Indexs,typename...real_Args>
+		function_ret_type  caller(make_index<Indexs...>&&,std::tuple<real_Args...>& tuple)
 		{
-			return real_caller<ClassObj, function_ret_type>(this,std::get<real_Args>(tuple)...);
+			return real_caller<ClassObj, function_ret_type>(this, std::get<Indexs>(tuple)...);
 		}
-
-		//template<typename...real_params>
-		//typename std::enable_if<is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(real_params&&...args)
-		//{
-		//	return (_obj->*_function)(std::forward<real_params>(args)...);
-		//}
-
-		//template<typename...real_params>
-		//typename std::enable_if<!is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(real_params&&...args)
-		//{
-		//	return (_obj.*_function)(std::forward<real_params>(args)...);
-		//}
 
 		menmber_function_type _function;
 	};
