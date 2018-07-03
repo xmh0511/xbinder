@@ -15,6 +15,10 @@ struct Test
 	}
 	int m_abc = 0;
 };
+void same_test(int a, int b, int c)
+{
+	std::cout << a << "," << b << "," << c << std::endl;
+}
 int main()
 {
 
@@ -32,6 +36,11 @@ int main()
 	f2(value2);
 	std::cout << value2 << std::endl;
 	std::cout << t.m_abc << std::endl;
+
+	auto f3 = xmh::make_xbinder(&same_test, 0, 1,2);
+	f3
+	();
+	//std::cout << typeid(xmh::make_index<1, 3>::type).name() << std::endl;
 	std::cin.get();
 	return 0;
 }
