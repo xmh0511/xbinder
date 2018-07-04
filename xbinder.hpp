@@ -183,7 +183,7 @@ namespace xmh {
 
 		x_binder(F&& function, Args...args) :_function(std::forward<F>(function)), place_tuple(std::tuple<Args...>(args...))
 		{
-			/*std::cout << typeid(place_tuple).name() << std::endl;*/
+
 		}
 		template<typename...RealArgs>
 		function_ret_type  operator()(RealArgs&&...rargs)
@@ -199,17 +199,17 @@ namespace xmh {
 		F _function;
 	};
 
-	template<typename ClassObj,typename function_ret_type,typename friendClass,typename...real_params>
-	typename std::enable_if<is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(friendClass* that,real_params&&...args)
-	{
-		return ((that->_obj)->*(that->_function))(std::forward<real_params>(args)...);
-	}
-
-	template<typename ClassObj, typename function_ret_type, typename friendClass, typename...real_params>
-	typename std::enable_if<!is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(friendClass* that, real_params&&...args)
-	{
-		return ((that->_obj).*(that->_function))(std::forward<real_params>(args)...);
-	}
+//	template<typename ClassObj,typename function_ret_type,typename friendClass,typename...real_params>
+//	typename std::enable_if<is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(friendClass* that,real_params&&...args)
+//	{
+//		return ((that->_obj)->*(that->_function))(std::forward<real_params>(args)...);
+//	}
+//
+//	template<typename ClassObj, typename function_ret_type, typename friendClass, typename...real_params>
+//	typename std::enable_if<!is_a_class_point<ClassObj>::value, function_ret_type>::type real_caller(friendClass* that, real_params&&...args)
+//	{
+//		return ((that->_obj).*(that->_function))(std::forward<real_params>(args)...);
+//	}
 
 	template<typename ClassObj,typename Class, typename Ret, typename...Args, typename...PArgs>
 	struct x_binder<Ret(Class::*)(Args...), ClassObj, PArgs...>
@@ -233,7 +233,19 @@ namespace xmh {
 		template<int...Indexs,typename...real_Args>
 		function_ret_type  caller(make_index<Indexs...>&&,std::tuple<real_Args...>& tuple)
 		{
-			return real_caller<ClassObj, function_ret_type>(this, std::get<Indexs>(tuple)...);
+			return real_caller<ClassObj>(std::get<Indexs>(tuple)...);
+		}
+
+		template<typename ClassObjType,typename...real_params>
+		typename std::enable_if<is_a_class_point<ClassObjType>::value, function_ret_type>::type real_caller(real_params&&...args)
+		{
+			return (_obj->*_function)(std::forward<real_params>(args)...);
+		}
+
+		template<typename ClassObjType,typename...real_params>
+		typename std::enable_if<!is_a_class_point<ClassObjType>::value, function_ret_type>::type real_caller(real_params&&...args)
+		{
+			return (_obj.*_function)(std::forward<real_params>(args)...);
 		}
 
 		menmber_function_type _function;
